@@ -11,9 +11,15 @@ const ProjectSchema = mongoose.Schema({
     description:{
         type:String,
     },
-    image:{
-        type:String,
-        required:[true,'image is required']
+    image: {
+        type: [String],
+        required: [true, 'At least one image is required'],
+        validate: {
+            validator: function (arr) {
+                return Array.isArray(arr) && arr.length > 0;
+            },
+            message: 'Project must include at least one image'
+        }
     },
     status:{
         type:String,
@@ -25,4 +31,7 @@ const ProjectSchema = mongoose.Schema({
     completionDate:{
         type:Date,
     }
-});
+},{timestamps:true});
+
+const Project = mongoose.model('Project',ProjectSchema);
+module.exports = Project;
