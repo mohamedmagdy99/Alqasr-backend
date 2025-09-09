@@ -1,11 +1,37 @@
+const mongoose = require('mongoose');
 const Project = require('../models/Project.model');
+const gallery = require('../models/Gallery.model');
 
-exports.createProject =async (req, res) => {
-    try{
-        const project = await Project.create(req.body);
-        res.status(201).json({success:true,data:project});
-    }catch(err){
-        res.status(400).json({success:false,err:err.message});
+function normalizeImages(body) {
+    let imgs = body?.images;
+    if (!imgs && body?.image) imgs = [body.image];
+    if (!imgs) return [];
+    return Array.isArray(imgs) ? imgs.filter(Boolean) : [imgs].filter(Boolean);
+}
+
+exports.createProject = async (req, res) => {
+    const session = await mongoose.startSession();
+    try {
+        session.startTransaction();
+
+        const project = await Project.create(req.body, { session });
+
+        const images = normalizeImages(req.body);
+        if (images.length) {
+            const docs = images.map((img) => ({
+                project: project._id,
+                image: img
+            }));
+            await gallery.insertMany(docs, { session });
+        }
+
+        await session.commitTransaction();
+        res.status(201).json({ success: true, data: project });
+    } catch (err) {
+        await session.abortTransaction();
+        res.status(400).json({ success: false, err: err.message });
+    } finally {
+        session.endSession();
     }
 };
 
@@ -14,7 +40,6 @@ exports.getAllProjects = async (req, res) => {
         const { page = 1, limit = 10, status, type } = req.query;
         const skip = (page - 1) * limit;
 
-        // Build dynamic filter
         const filter = {};
         if (status) filter.status = status;
         if (type) filter.type = type;
@@ -38,39 +63,79 @@ exports.getAllProjects = async (req, res) => {
     }
 };
 
-
-exports.getProjectById = async (req,res)=>{
-    try{
+exports.getProjectById = async (req, res) => {
+    try {
         const project = await Project.findById(req.params.id);
-        if(!project){
-            return res.status(404).json({success:false,err:'project not found'});
+        if (!project) {
+            return res.status(404).json({ success: false, err: 'project not found' });
         }
-        res.status(200).json({success:true,data:project});
-    }catch (err){
-        res.status(500).json({success:false,err:err.message});
+        res.status(200).json({ success: true, data: project });
+    } catch (err) {
+        res.status(500).json({ success: false, err: err.message });
     }
 };
 
-exports.updateProject = async (req,res)=>{
-    try{
-        const project = await Project.findByIdAndUpdate(req.params.id,req.body,{new:true, runValidators:true});
-        if(!project){
-            return res.status(404).json({success:false,err:'project not found'});
+exports.updateProject = async (req, res) => {
+    const session = await mongoose.startSession();
+    try {
+        session.startTransaction();
+
+        const project = await Project.findByIdAndUpdate(
+            req.params.id,
+            req.body,
+            { new: true, runValidators: true, session }
+        );
+
+        if (!project) {
+            await session.abortTransaction();
+            return res.status(404).json({ success: false, err: 'project not found' });
         }
-        res.status(200).json({success:true,data:project});
-    }catch (err){
-        res.status(400).json({success:false,err:err.message});
+
+        const imagesProvided = Object.prototype.hasOwnProperty.call(req.body, 'images') ||
+            Object.prototype.hasOwnProperty.call(req.body, 'image');
+
+        if (imagesProvided) {
+            await gallery.deleteMany({ project: project._id }, { session });
+
+            const images = normalizeImages(req.body);
+            if (images.length) {
+                const docs = images.map((img) => ({
+                    project: project._id,
+                    image: img
+                }));
+                await gallery.insertMany(docs, { session });
+            }
+        }
+
+        await session.commitTransaction();
+        res.status(200).json({ success: true, data: project });
+    } catch (err) {
+        await session.abortTransaction();
+        res.status(400).json({ success: false, err: err.message });
+    } finally {
+        session.endSession();
     }
 };
 
-exports.deleteProject = async (req,res)=>{
-    try{
-        const project = await Project.findByIdAndDelete(req.params.id);
-        if(!project){
-            return res.status(404).json({success:false,err:'project not found'});
+exports.deleteProject = async (req, res) => {
+    const session = await mongoose.startSession();
+    try {
+        session.startTransaction();
+
+        const project = await Project.findByIdAndDelete(req.params.id, { session });
+        if (!project) {
+            await session.abortTransaction();
+            return res.status(404).json({ success: false, err: 'project not found' });
         }
-        res.status(200).json({success:true,data:project});
-    }catch (err){
-        res.status(500).json({success:false,err:err.message});
+
+        await gallery.deleteMany({ project: project._id }, { session });
+
+        await session.commitTransaction();
+        res.status(200).json({ success: true, data: project });
+    } catch (err) {
+        await session.abortTransaction();
+        res.status(500).json({ success: false, err: err.message });
+    } finally {
+        session.endSession();
     }
 };
