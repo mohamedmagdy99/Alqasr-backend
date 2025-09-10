@@ -10,28 +10,33 @@ function normalizeImages(body) {
 }
 
 exports.createProject = async (req, res) => {
-    const session = await mongoose.startSession();
     try {
-        session.startTransaction();
+        // ✅ Normalize once and reuse
+        const normalizedBody = { ...req.body, image: normalizeImages(req.body) };
 
-        const project = await Project.create(req.body, { session });
+        // ✅ Validate normalized payload
+        await new Project(normalizedBody).validate();
 
-        const images = normalizeImages(req.body);
+        // ✅ Create using normalized payload
+        const project = await Project.create(normalizedBody);
+
+        const images = normalizedBody.image;
         if (images.length) {
             const docs = images.map((img) => ({
                 project: project._id,
                 image: img
             }));
-            await gallery.insertMany(docs, { session });
+            await gallery.insertMany(docs);
         }
 
-        await session.commitTransaction();
         res.status(201).json({ success: true, data: project });
     } catch (err) {
-        await session.abortTransaction();
-        res.status(400).json({ success: false, err: err.message });
-    } finally {
-        session.endSession();
+        res.status(400).json({
+            success: false,
+            err: err.message,
+            fields: err.errors ? Object.keys(err.errors) : null,
+            details: err.errors || null
+        });
     }
 };
 

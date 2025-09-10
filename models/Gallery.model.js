@@ -1,8 +1,15 @@
 const mongoose = require('mongoose');
+
 const GallerySchema = new mongoose.Schema({
+    project: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Project',
+        required: true
+    },
     image: {
-        projectId:String,
         type: String,
+        required: true
     }
-});
-module.exports=mongoose.model('Gallery',GallerySchema);
+}, { timestamps: true });
+
+module.exports = mongoose.model('Gallery', GallerySchema);
