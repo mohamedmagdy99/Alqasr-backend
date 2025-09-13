@@ -5,6 +5,7 @@ const authRoutes = require('./routes/authRoutes');
 const galleryRoutes = require('./routes/galleryRoutes');
 const errorHandler = require('./middleware/errorHandler');
 const cookieParser = require('cookie-parser');
+const cors = require('cors');
 const allowedOrigins = [
     "http://localhost:3001",
     "https://alqasy-realestate-development.vercel.app",
