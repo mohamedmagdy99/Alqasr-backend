@@ -7,7 +7,7 @@ const errorHandler = require('./middleware/errorHandler');
 const cookieParser = require('cookie-parser');
 const allowedOrigins = [
     "http://localhost:3001",
-    "https://alqasy-realestate-development.vercel.app/",
+    "https://alqasy-realestate-development.vercel.app",
 ];
 
 app.use(
