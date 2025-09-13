@@ -17,7 +17,11 @@ function normalizeImages(body) {
 
 exports.createProject = async (req, res) => {
     try {
-        // ✅ Normalize once and reuse
+        console.log("User from middleware:", req.user);
+        console.log("User from middleware:", req.user);
+        console.log("Body received:", req.body);
+        console.log("Files received:", req.files);
+
         const normalizedBody = { ...req.body, image: normalizeImages(req.body) };
         const imageUploadPromises = Array.isArray(req.files)
             ? req.files.map((file) =>
@@ -33,7 +37,7 @@ exports.createProject = async (req, res) => {
         if (imageUrls.length) {
             const docs = imageUrls.map((img) => ({
                 project: project._id,
-                image: img
+                image: img,
             }));
             await gallery.insertMany(docs);
         }
@@ -44,7 +48,7 @@ exports.createProject = async (req, res) => {
             success: false,
             err: err.message,
             fields: err.errors ? Object.keys(err.errors) : null,
-            details: err.errors || null
+            details: err.errors || null,
         });
     }
 };

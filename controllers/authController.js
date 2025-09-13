@@ -1,7 +1,6 @@
 const User = require('../models/User.model');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-
 const generateToken = (userid) => {
     return jwt.sign({id:userid},process.env.JWT_SECRET,{expiresIn:'7d'});
 };
@@ -37,29 +36,56 @@ exports.signup = async (req,res)=>{
     }
 };
 
-exports.signin = async (req,res)=>{
+exports.signin = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            return res.status(400).json({ success: false, err: "Invalid Email" });
+        }
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ success: false, err: "Invalid Password" });
+        }
+
+        const token = jwt.sign(
+            { id: user._id.toString(), role: user.role },
+            process.env.NEXTAUTH_SECRET,
+            { expiresIn: "1h" }
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "User signed in successfully",
+            user: {
+                id: user._id.toString(),
+                name: user.name,
+                email: user.email,
+                role: user.role,
+            },
+            token, // <— include token in response
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, err: err.message });
+    }
+};
+
+exports.getUsers = async (req,res)=>{
     try{
-        const {email,password} = req.body;
-        const user = await User.findOne({email});
+        const {email} = req.body;
+        const user = await User.findOne(email);
         if(!user){
             return res.status(400).json({success:false,err:'Invalid Email'});
         }
-        const isMatch=  await bcrypt.compare(password,user.password);
-        if(!isMatch){
-            return res.status(400).json({success:false,err:'Invalid Password'});
-        }
-        const token = generateToken(user._id);
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure:  true,
-            sameSite: 'none',
-            maxAge: 7 * 24 * 60 * 60 * 1000
-        }).status(200).json({success:true,message: 'User signed in successfully',user: {
-            id: user._id,
-            name: user.name,
-            email: user.email,
+        res.status(200).json({success:true,data:{
+                name: user.name,
+                email: user.email,
+                role: user.role,
             }});
     }catch (err){
         res.status(500).json({success:false,err:err.message});
     }
-}
+};
+

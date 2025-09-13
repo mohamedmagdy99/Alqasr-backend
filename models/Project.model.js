@@ -30,6 +30,9 @@ const ProjectSchema = mongoose.Schema({
     },
     completionDate:{
         type:Date,
+    },
+    features:{
+        type:[String],
     }
 },{timestamps:true});
 
