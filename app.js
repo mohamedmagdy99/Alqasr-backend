@@ -5,11 +5,25 @@ const authRoutes = require('./routes/authRoutes');
 const galleryRoutes = require('./routes/galleryRoutes');
 const errorHandler = require('./middleware/errorHandler');
 const cookieParser = require('cookie-parser');
-const cors = require('cors');
-app.use(cors({
-    origin: 'http://localhost:3001', // or use '*' for development only
-    credentials: true, // if you're sending cookies or auth headers
-}));
+const allowedOrigins = [
+    "http://localhost:3001",
+    "https://alqasy-realestate-development.vercel.app/",
+];
+
+app.use(
+    cors({
+        origin: function (origin, callback) {
+            // allow requests with no origin (like Postman or curl)
+            if (!origin) return callback(null, true);
+            if (allowedOrigins.includes(origin)) {
+                return callback(null, true);
+            } else {
+                return callback(new Error("Not allowed by CORS"));
+            }
+        },
+        credentials: true, // allow credentials (cookies, headers, etc.) if needed
+    })
+);
 app.use(express.json());
 app.use(cookieParser());
 app.use('/api/projects',projectRoutes);
