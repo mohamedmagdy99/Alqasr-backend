@@ -8,55 +8,57 @@ const extractKeyFromUrl = (url) => url.split('/').slice(3).join('/');
 
 exports.createProject = async (req, res) => {
     try {
-        // Main image
+        // 1️⃣ Check main image
         const mainImageFiles = req.files.image || [];
         if (!mainImageFiles.length) {
             return res.status(400).json({
                 success: false,
                 err: 'Project must include at least one image',
-                fields: ['image']
+                fields: ['image'],
             });
         }
 
-        // Upload main image
+        // 2️⃣ Upload main image to S3
         const mainImageUpload = await uploadToS3(
             mainImageFiles[0].buffer,
             mainImageFiles[0].originalname,
             mainImageFiles[0].mimetype
         );
 
-        // Upload gallery images if present
+        // 3️⃣ Upload gallery images if present
         const galleryFiles = req.files.gallery || [];
-        const galleryUploadPromises = galleryFiles.map(file =>
-            uploadToS3(file.buffer, file.originalname, file.mimetype)
+        const galleryUrls = await Promise.all(
+            galleryFiles.map((file) =>
+                uploadToS3(file.buffer, file.originalname, file.mimetype)
+            )
         );
-        const galleryUrls = await Promise.all(galleryUploadPromises);
 
-        // Create project
+        // Include the main image in the gallery as well
+        const allGalleryImages = [mainImageUpload, ...galleryUrls];
+
+        // 4️⃣ Create project
         const projectData = {
             ...req.body,
             image: mainImageUpload,
-            gallery: galleryUrls
+            gallery: galleryUrls,
         };
-
         const project = await Project.create(projectData);
 
-        // Optionally insert gallery docs if you have a separate collection
-        if (galleryUrls.length) {
-            const docs = galleryUrls.map(img => ({
-                project: project._id,
-                image: img
-            }));
-            await gallery.insertMany(docs);
-        }
+        // 5️⃣ Insert all images into gallery table/collection
+        const galleryDocs = allGalleryImages.map((img) => ({
+            project: project._id,
+            image: img,
+        }));
+        await gallery.insertMany(galleryDocs);
 
+        // 6️⃣ Respond
         res.status(201).json({ success: true, data: project });
     } catch (err) {
         res.status(400).json({
             success: false,
             err: err.message,
             fields: err.errors ? Object.keys(err.errors) : null,
-            details: err.errors || null
+            details: err.errors || null,
         });
     }
 };
