@@ -145,6 +145,7 @@ exports.updateProject = async (req, res) => {
         }
 
         // 2️⃣ Upload new images
+        // 2️⃣ Upload new images
         let newImages = [];
         if (req.files && req.files.image?.length) {
             newImages = await Promise.all(
@@ -153,6 +154,7 @@ exports.updateProject = async (req, res) => {
                 )
             );
         }
+
         // Insert new images to Gallery table
         if (newImages.length) {
             const newDocs = newImages.map(img => ({
