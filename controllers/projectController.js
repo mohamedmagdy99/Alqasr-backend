@@ -145,12 +145,14 @@ exports.updateProject = async (req, res) => {
         }
 
         // 2️⃣ Upload new images
-        const newImages = req.files?.length
-            ? await Promise.all(
-                req.files.map(file => uploadToS3(file.buffer, file.originalname, file.mimetype))
-            )
-            : [];
-
+        let newImages = [];
+        if (req.files && req.files.image?.length) {
+            newImages = await Promise.all(
+                req.files.image.map(file =>
+                    uploadToS3(file.buffer, file.originalname, file.mimetype)
+                )
+            );
+        }
         // Insert new images to Gallery table
         if (newImages.length) {
             const newDocs = newImages.map(img => ({
