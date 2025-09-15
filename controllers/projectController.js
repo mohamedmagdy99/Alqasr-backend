@@ -162,10 +162,17 @@ exports.updateProject = async (req, res) => {
             }));
             await gallery.insertMany(newDocs, { session });
         }
+        let finalImages = [];
 
-        // 3️⃣ Merge remaining images + new images
-        const remainingImages = project.image.filter(img => !removedImages.includes(img));
-        const finalImages = [...remainingImages, ...newImages];
+        if (Array.isArray(project.image)) {
+            const remainingImages = project.image.filter(img => !removedImages.includes(img));
+            finalImages = [...remainingImages, ...newImages];
+        } else {
+            // Single image case
+            finalImages = newImages.length
+                ? newImages // overwrite with new
+                : (removedImages.includes(project.image) ? [] : [project.image]);
+        }
 
         // 4️⃣ Update other fields only
         const { images, removedImages: __, image: ___, ...otherFields } = req.body;
