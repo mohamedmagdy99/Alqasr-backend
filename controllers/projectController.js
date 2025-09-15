@@ -154,7 +154,6 @@ exports.updateProject = async (req, res) => {
                 )
             );
         }
-
         // Insert new images to Gallery table
         if (newImages.length) {
             const newDocs = newImages.map(img => ({

@@ -30,7 +30,7 @@ const uploadMiddleware = (req, res, next) => {
 
 // Routes
 router.post('/', auth, uploadMiddleware, createProject);
-router.put('/:id', auth, uploadMiddleware, updateProject);
+router.put('/:id', auth, upload.any(), updateProject);
 router.get('/', getAllProjects);
 router.get('/:id', getProjectById);
 router.delete('/:id', auth, deleteProject);
