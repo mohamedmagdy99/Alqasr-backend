@@ -6,33 +6,46 @@ const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const s3 = require('../utils/s3Client'); // your configured S3Client
 const extractKeyFromUrl = (url) => url.split('/').slice(3).join('/');
 
-
-function normalizeImages(body) {
-    let imgs = body?.images;
-    if (!imgs && body?.image) imgs = [body.image];
-    if (!imgs) return [];
-    return Array.isArray(imgs) ? imgs.filter(Boolean) : [imgs].filter(Boolean);
-}
-
-
 exports.createProject = async (req, res) => {
     try {
-        const normalizedBody = { ...req.body, image: normalizeImages(req.body) };
-        const imageUploadPromises = Array.isArray(req.files)
-            ? req.files.map((file) =>
-                uploadToS3(file.buffer, file.originalname, file.mimetype)
-            )
-            : [];
+        // Main image
+        const mainImageFiles = req.files.image || [];
+        if (!mainImageFiles.length) {
+            return res.status(400).json({
+                success: false,
+                err: 'Project must include at least one image',
+                fields: ['image']
+            });
+        }
 
-        const imageUrls = await Promise.all(imageUploadPromises);
-        normalizedBody.image = imageUrls;
+        // Upload main image
+        const mainImageUpload = await uploadToS3(
+            mainImageFiles[0].buffer,
+            mainImageFiles[0].originalname,
+            mainImageFiles[0].mimetype
+        );
 
-        const project = await Project.create(normalizedBody);
+        // Upload gallery images if present
+        const galleryFiles = req.files.gallery || [];
+        const galleryUploadPromises = galleryFiles.map(file =>
+            uploadToS3(file.buffer, file.originalname, file.mimetype)
+        );
+        const galleryUrls = await Promise.all(galleryUploadPromises);
 
-        if (imageUrls.length) {
-            const docs = imageUrls.map((img) => ({
+        // Create project
+        const projectData = {
+            ...req.body,
+            image: mainImageUpload,
+            gallery: galleryUrls
+        };
+
+        const project = await Project.create(projectData);
+
+        // Optionally insert gallery docs if you have a separate collection
+        if (galleryUrls.length) {
+            const docs = galleryUrls.map(img => ({
                 project: project._id,
-                image: img,
+                image: img
             }));
             await gallery.insertMany(docs);
         }
@@ -43,7 +56,7 @@ exports.createProject = async (req, res) => {
             success: false,
             err: err.message,
             fields: err.errors ? Object.keys(err.errors) : null,
-            details: err.errors || null,
+            details: err.errors || null
         });
     }
 };
