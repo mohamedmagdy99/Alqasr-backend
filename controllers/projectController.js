@@ -17,11 +17,6 @@ function normalizeImages(body) {
 
 exports.createProject = async (req, res) => {
     try {
-        console.log("User from middleware:", req.user);
-        console.log("User from middleware:", req.user);
-        console.log("Body received:", req.body);
-        console.log("Files received:", req.files);
-
         const normalizedBody = { ...req.body, image: normalizeImages(req.body) };
         const imageUploadPromises = Array.isArray(req.files)
             ? req.files.map((file) =>
@@ -116,62 +111,69 @@ exports.updateProject = async (req, res) => {
     try {
         session.startTransaction();
 
-        const existing = await Project.findById(req.params.id).session(session);
-        if (!existing) {
+        const project = await Project.findById(req.params.id).session(session);
+        if (!project) {
             await session.abortTransaction();
-            return res.status(404).json({ success: false, err: 'project not found' });
+            return res.status(404).json({ success: false, err: "Project not found" });
         }
 
-        // ✅ Upload new images only if files are provided
-        let imageUrls = [];
-        if (req.files?.length) {
-            imageUrls = await Promise.all(
-                req.files.map((file) =>
-                    uploadToS3(file.buffer, file.originalname, file.mimetype)
-                )
-            );
-            req.body.image = imageUrls;
+        // Parse removedImages
+        let removedImages = [];
+        if (req.body.removedImages) {
+            removedImages = Array.isArray(req.body.removedImages)
+                ? req.body.removedImages
+                : [req.body.removedImages];
         }
 
-        const imagesProvided = imageUrls.length > 0;
-
-        // ✅ Delete old images from S3 only if new ones are provided
-        if (imagesProvided && existing.image?.length) {
-            for (const url of existing.image) {
+        // 1️⃣ Remove images from S3 and Gallery table
+        if (removedImages.length) {
+            for (const url of removedImages) {
                 const key = extractKeyFromUrl(url);
                 await s3.send(new DeleteObjectCommand({
                     Bucket: process.env.AWS_BUCKET_NAME,
                     Key: key
                 }));
+
+                // Remove from Gallery table
+                await gallery.deleteOne({ project: project._id, image: url }).session(session);
             }
         }
 
-        // ✅ Update project with new data
-        const updated = await Project.findByIdAndUpdate(
+        // 2️⃣ Upload new images
+        const newImages = req.files?.length
+            ? await Promise.all(
+                req.files.map(file => uploadToS3(file.buffer, file.originalname, file.mimetype))
+            )
+            : [];
+
+        // Insert new images to Gallery table
+        if (newImages.length) {
+            const newDocs = newImages.map(img => ({
+                project: project._id,
+                image: img
+            }));
+            await gallery.insertMany(newDocs, { session });
+        }
+
+        // 3️⃣ Merge remaining images + new images
+        const remainingImages = project.image.filter(img => !removedImages.includes(img));
+        const finalImages = [...remainingImages, ...newImages];
+
+        // 4️⃣ Update other fields only
+        const { images, removedImages: __, image: ___, ...otherFields } = req.body;
+        const updatedData = {
+            ...otherFields,
+            image: finalImages,
+        };
+
+        const updatedProject = await Project.findByIdAndUpdate(
             req.params.id,
-            req.body,
+            updatedData,
             { new: true, runValidators: true, session }
         );
 
-        // ✅ Sync gallery only if new images were uploaded
-        if (imagesProvided) {
-            await gallery.deleteMany({ project: updated._id }, { session });
-
-            const images = normalizeImages(req.body);
-            const docs = images
-                .filter((img) => typeof img === 'string')
-                .map((img) => ({
-                    project: updated._id,
-                    image: img
-                }));
-
-            if (docs.length) {
-                await gallery.insertMany(docs, { session });
-            }
-        }
-
         await session.commitTransaction();
-        res.status(200).json({ success: true, data: updated });
+        res.status(200).json({ success: true, data: updatedProject });
     } catch (err) {
         await session.abortTransaction();
         res.status(400).json({ success: false, err: err.message });

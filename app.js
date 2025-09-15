@@ -9,6 +9,7 @@ const cors = require('cors');
 const allowedOrigins = [
     "http://localhost:3001",
     "https://alqasy-realestate-development.vercel.app",
+    "https://elqasr-development.com"
 ];
 
 app.use(
