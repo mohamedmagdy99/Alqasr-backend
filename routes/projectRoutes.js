@@ -14,8 +14,7 @@ const {
 
 // Multer wrapper with error handling
 const handleUpload = upload.fields([
-    { name: 'image', maxCount: 1 },
-    { name: 'gallery', maxCount: 5 }
+    { name: 'image', maxCount: 30 }
 ]);
 
 const uploadMiddleware = (req, res, next) => {

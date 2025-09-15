@@ -18,33 +18,20 @@ exports.createProject = async (req, res) => {
             });
         }
 
-        // 2️⃣ Upload main image to S3
         const mainImageUpload = await uploadToS3(
             mainImageFiles[0].buffer,
             mainImageFiles[0].originalname,
             mainImageFiles[0].mimetype
         );
 
-        // 3️⃣ Upload gallery images if present
-        const galleryFiles = req.files.gallery || [];
-        const galleryUrls = await Promise.all(
-            galleryFiles.map((file) =>
-                uploadToS3(file.buffer, file.originalname, file.mimetype)
-            )
-        );
+        const allGalleryImages = [mainImageUpload];
 
-        // Include the main image in the gallery as well
-        const allGalleryImages = [mainImageUpload, ...galleryUrls];
-
-        // 4️⃣ Create project
         const projectData = {
             ...req.body,
-            image: mainImageUpload,
-            gallery: galleryUrls,
+            image: mainImageUpload, // only main image
         };
         const project = await Project.create(projectData);
 
-        // 5️⃣ Insert all images into gallery table/collection
         const galleryDocs = allGalleryImages.map((img) => ({
             project: project._id,
             image: img,
@@ -62,6 +49,7 @@ exports.createProject = async (req, res) => {
         });
     }
 };
+
 
 exports.getAllProjects = async (req, res) => {
     try {
