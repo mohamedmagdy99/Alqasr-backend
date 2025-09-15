@@ -8,9 +8,9 @@ const extractKeyFromUrl = (url) => url.split('/').slice(3).join('/');
 
 exports.createProject = async (req, res) => {
     try {
-        // 1️⃣ Check main image
-        const mainImageFiles = req.files.image || [];
-        if (!mainImageFiles.length) {
+        // 1️⃣ Get all uploaded images
+        const imageFiles = req.files.image || [];
+        if (!imageFiles.length) {
             return res.status(400).json({
                 success: false,
                 err: 'Project must include at least one image',
@@ -18,27 +18,28 @@ exports.createProject = async (req, res) => {
             });
         }
 
-        const mainImageUpload = await uploadToS3(
-            mainImageFiles[0].buffer,
-            mainImageFiles[0].originalname,
-            mainImageFiles[0].mimetype
+        // 2️⃣ Upload all images to S3
+        const uploadedImages = await Promise.all(
+            imageFiles.map(file =>
+                uploadToS3(file.buffer, file.originalname, file.mimetype)
+            )
         );
 
-        const allGalleryImages = [mainImageUpload];
-
+        // 3️⃣ Create project (Project.image is an array)
         const projectData = {
             ...req.body,
-            image: mainImageUpload, // only main image
+            image: uploadedImages, // array of all uploaded images
         };
         const project = await Project.create(projectData);
 
-        const galleryDocs = allGalleryImages.map((img) => ({
+        // 4️⃣ Insert all images into gallery collection
+        const galleryDocs = uploadedImages.map(img => ({
             project: project._id,
             image: img,
         }));
         await gallery.insertMany(galleryDocs);
 
-        // 6️⃣ Respond
+        // 5️⃣ Respond
         res.status(201).json({ success: true, data: project });
     } catch (err) {
         res.status(400).json({
@@ -49,6 +50,7 @@ exports.createProject = async (req, res) => {
         });
     }
 };
+
 
 
 exports.getAllProjects = async (req, res) => {
