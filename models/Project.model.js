@@ -1,40 +1,24 @@
-const mongoose = require('mongoose');
-const ProjectSchema = mongoose.Schema({
-    title:{
-        type:String,
-        required:[true,'title is required']
-    },
-    type:{
-        type:String,
-        required:[true,'type is required']
-    },
-    description:{
-        type:String,
-    },
-    image: {
-        type: [String],
-        required: [true, 'At least one image is required'],
-        validate: {
-            validator: function (arr) {
-                return Array.isArray(arr) && arr.length > 0;
-            },
-            message: 'Project must include at least one image'
-        }
-    },
-    status:{
-        type:String,
-        required:[true,'status is required']
-    },
-    location:{
-        type:String,
-    },
-    completionDate:{
-        type:Date,
-    },
-    features:{
-        type:[String],
-    }
-},{timestamps:true});
+const mongoose = require("mongoose");
 
-const Project = mongoose.model('Project',ProjectSchema);
-module.exports = Project;
+const multiLangStringSchema = new mongoose.Schema({
+    en: { type: String, required: true },
+    ar: { type: String, required: true }
+}, { _id: false });
+
+const multiLangArraySchema = new mongoose.Schema({
+    en: [{ type: String }],
+    ar: [{ type: String }]
+}, { _id: false });
+
+const projectSchema = new mongoose.Schema({
+    title: { type: multiLangStringSchema, required: true },
+    type: { type: String, required: true },
+    description: { type: multiLangStringSchema, required: true },
+    image: [{ type: String, required: true }],
+    status: { type: multiLangStringSchema, required: true },
+    location: { type: multiLangStringSchema, required: true },
+    completionDate: { type: Date },
+    features: { type: multiLangArraySchema, default: { en: [], ar: [] } },
+}, { timestamps: true });
+
+module.exports = mongoose.model("Project", projectSchema);

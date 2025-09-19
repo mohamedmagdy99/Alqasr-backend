@@ -8,7 +8,6 @@ const extractKeyFromUrl = (url) => url.split('/').slice(3).join('/');
 
 exports.createProject = async (req, res) => {
     try {
-        // 1️⃣ Get all uploaded images
         const imageFiles = req.files.image || [];
         if (!imageFiles.length) {
             return res.status(400).json({
@@ -18,28 +17,36 @@ exports.createProject = async (req, res) => {
             });
         }
 
-        // 2️⃣ Upload all images to S3
         const uploadedImages = await Promise.all(
             imageFiles.map(file =>
                 uploadToS3(file.buffer, file.originalname, file.mimetype)
             )
         );
 
-        // 3️⃣ Create project (Project.image is an array)
         const projectData = {
-            ...req.body,
-            image: uploadedImages, // array of all uploaded images
+            title: req.body.title,
+            type: req.body.type,
+            description: req.body.description,
+            image: uploadedImages,
+            status: req.body.status,
+            location: req.body.location,
+            features: req.body.features,
         };
+
+        // Handle completionDate if provided
+        if (req.body.completionDate) {
+            projectData.completionDate = new Date(req.body.completionDate);
+        }
+
         const project = await Project.create(projectData);
 
-        // 4️⃣ Insert all images into gallery collection
+        // Insert images into gallery collection
         const galleryDocs = uploadedImages.map(img => ({
             project: project._id,
             image: img,
         }));
         await gallery.insertMany(galleryDocs);
 
-        // 5️⃣ Respond
         res.status(201).json({ success: true, data: project });
     } catch (err) {
         res.status(400).json({
@@ -50,16 +57,13 @@ exports.createProject = async (req, res) => {
         });
     }
 };
-
-
-
 exports.getAllProjects = async (req, res) => {
     try {
         const { page = 1, limit = 10, status, type } = req.query;
         const skip = (page - 1) * limit;
 
         const filter = {};
-        if (status) filter.status = status;
+        if (status) filter['status.en'] = status;
         if (type) filter.type = type;
 
         const total = await Project.countDocuments(filter);
@@ -68,7 +72,6 @@ exports.getAllProjects = async (req, res) => {
             .skip(skip)
             .limit(parseInt(limit));
 
-        // ✅ Normalize image URLs
         const formattedProjects = projects.map((project) => ({
             ...project.toObject(),
             image: Array.isArray(project.image)
@@ -79,6 +82,7 @@ exports.getAllProjects = async (req, res) => {
         res.status(200).json({
             success: true,
             count: formattedProjects.length,
+            total,
             totalPages: Math.ceil(total / limit),
             currentPage: parseInt(page),
             filters: { status, type },
@@ -89,14 +93,13 @@ exports.getAllProjects = async (req, res) => {
     }
 };
 
-exports.getProjectById = async (req, res) => {
+    exports.getProjectById = async (req, res) => {
     try {
         const project = await Project.findById(req.params.id);
         if (!project) {
             return res.status(404).json({ success: false, err: 'project not found' });
         }
 
-        // ✅ Normalize image URLs
         const formatted = {
             ...project.toObject(),
             image: Array.isArray(project.image)
@@ -109,20 +112,20 @@ exports.getProjectById = async (req, res) => {
         res.status(500).json({ success: false, err: err.message });
     }
 };
-
-
 exports.updateProject = async (req, res) => {
     const session = await mongoose.startSession();
     try {
         session.startTransaction();
-
-        const project = await Project.findById(req.params.id).session(session);
-        if (!project) {
+        console.log("REQ BODY:", req.body);
+        const existingProject = await Project.findById(req.params.id).session(session);
+        if (!existingProject) {
             await session.abortTransaction();
             return res.status(404).json({ success: false, err: "Project not found" });
         }
 
-        // Parse removedImages
+        // -----------------------------
+        // Handle removed images
+        // -----------------------------
         let removedImages = [];
         if (req.body.removedImages) {
             removedImages = Array.isArray(req.body.removedImages)
@@ -130,22 +133,21 @@ exports.updateProject = async (req, res) => {
                 : [req.body.removedImages];
         }
 
-        // 1️⃣ Remove images from S3 and Gallery table
         if (removedImages.length) {
             for (const url of removedImages) {
                 const key = extractKeyFromUrl(url);
                 await s3.send(new DeleteObjectCommand({
                     Bucket: process.env.AWS_BUCKET_NAME,
-                    Key: key
+                    Key: key,
                 }));
 
-                // Remove from Gallery table
-                await gallery.deleteOne({ project: project._id, image: url }).session(session);
+                await gallery.deleteOne({ project: existingProject._id, image: url }).session(session);
             }
         }
 
-        // 2️⃣ Upload new images
-        // 2️⃣ Upload new images
+        // -----------------------------
+        // Handle new uploaded images
+        // -----------------------------
         let newImages = [];
         if (req.files && req.files.image?.length) {
             newImages = await Promise.all(
@@ -154,33 +156,56 @@ exports.updateProject = async (req, res) => {
                 )
             );
         }
-        // Insert new images to Gallery table
+
         if (newImages.length) {
-            const newDocs = newImages.map(img => ({
-                project: project._id,
-                image: img
+            const galleryDocs = newImages.map(img => ({
+                project: existingProject._id,
+                image: img,
             }));
-            await gallery.insertMany(newDocs, { session });
-        }
-        let finalImages = [];
-
-        if (Array.isArray(project.image)) {
-            const remainingImages = project.image.filter(img => !removedImages.includes(img));
-            finalImages = [...remainingImages, ...newImages];
-        } else {
-            // Single image case
-            finalImages = newImages.length
-                ? newImages // overwrite with new
-                : (removedImages.includes(project.image) ? [] : [project.image]);
+            await gallery.insertMany(galleryDocs, { session });
         }
 
-        // 4️⃣ Update other fields only
-        const { images, removedImages: __, image: ___, ...otherFields } = req.body;
+        // -----------------------------
+        // Compute final images array
+        // -----------------------------
+        const finalImages = [
+            ...(existingProject.image || []).filter(img => !removedImages.includes(img)),
+            ...newImages,
+        ];
+
+        if (!finalImages.length) {
+            await session.abortTransaction();
+            return res.status(400).json({ success: false, err: "Project must include at least one image" });
+        }
+
+        // -----------------------------
+        // Parse multi-language fields
+        // -----------------------------
         const updatedData = {
-            ...otherFields,
+            title: {
+                en: req.body.title_en,
+                ar: req.body.title_ar,
+            },
+            description: {
+                en: req.body.description_en,
+                ar: req.body.description_ar,
+            },
+            location: {
+                en: req.body.location_en,
+                ar: req.body.location_ar,
+            },
+            status: {
+                en: req.body.status_en,
+                ar: req.body.status_ar,
+            },
+            type: req.body.type || existingProject.type,
+            features: {
+                en: Array.isArray(req.body.features_en) ? req.body.features_en : [],
+                ar: Array.isArray(req.body.features_ar) ? req.body.features_ar : [],
+            },
+            completionDate: req.body.completionDate || existingProject.completionDate,
             image: finalImages,
         };
-
         const updatedProject = await Project.findByIdAndUpdate(
             req.params.id,
             updatedData,
@@ -189,6 +214,7 @@ exports.updateProject = async (req, res) => {
 
         await session.commitTransaction();
         res.status(200).json({ success: true, data: updatedProject });
+
     } catch (err) {
         await session.abortTransaction();
         res.status(400).json({ success: false, err: err.message });
@@ -198,9 +224,7 @@ exports.updateProject = async (req, res) => {
 };
 
 
-
-
-exports.deleteProject = async (req, res) => {
+    exports.deleteProject = async (req, res) => {
     const session = await mongoose.startSession();
     try {
         session.startTransaction();
