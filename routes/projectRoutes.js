@@ -9,7 +9,8 @@ const {
     getAllProjects,
     getProjectById,
     updateProject,
-    deleteProject
+    deleteProject,
+    getAllProjectsForMainProject
 } = require('../controllers/projectController');
 
 // Multer wrapper with error handling
@@ -34,5 +35,5 @@ router.put('/:id', auth, upload.fields([{ name: 'image', maxCount: 30 }]), updat
 router.get('/', getAllProjects);
 router.get('/:id', getProjectById);
 router.delete('/:id', auth, deleteProject);
-
+router.get("/main/:id", getAllProjectsForMainProject);
 module.exports = router;

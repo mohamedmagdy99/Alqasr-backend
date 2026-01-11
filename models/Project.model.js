@@ -19,6 +19,10 @@ const projectSchema = new mongoose.Schema({
     location: { type: multiLangStringSchema, required: true },
     completionDate: { type: Date },
     features: { type: multiLangArraySchema, default: { en: [], ar: [] } },
+    bedrooms: { type: Number },
+    bathrooms: { type: Number },
+    area: { type: Number },
+    mainProject: { type: mongoose.Schema.Types.ObjectId, ref: "MainProject", required: true }
 }, { timestamps: true });
 
 module.exports = mongoose.model("Project", projectSchema);
