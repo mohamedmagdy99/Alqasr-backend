@@ -278,8 +278,10 @@ exports.deleteProject = async (req, res) => {
 };
 exports.getAllProjectsForMainProject = async (req, res) => {
   try {
+    const { page = 1, limit = 10 } = req.query;
+    const skip = (page - 1) * limit;
     const { id } = req.params;
-
+    
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
@@ -287,13 +289,20 @@ exports.getAllProjectsForMainProject = async (req, res) => {
       });
     }
 
-    const projects = await Project.find({ mainProject: id }).sort({
-      createdAt: -1,
-    });
-
+    const projects = await Project.find({ mainProject: id })
+      .sort({
+        createdAt: -1,
+      })
+      .skip(skip)
+      .limit(parseInt(limit));
+      
+    const total = await Project.countDocuments({ mainProject: id });
     res.status(200).json({
       success: true,
       count: projects.length,
+      total,
+      totalPages: Math.ceil(total / limit),
+      currentPage: parseInt(page),
       data: projects,
     });
   } catch (err) {

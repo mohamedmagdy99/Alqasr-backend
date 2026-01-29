@@ -1,10 +1,13 @@
 const User = require('../models/User.model');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-const generateToken = (userid) => {
-    return jwt.sign({id:userid},process.env.JWT_SECRET,{expiresIn:'7d'});
+const generateToken = (user) => {
+  return jwt.sign(
+    { id: user._id.toString(), role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" },
+  );
 };
-
 exports.signup = async (req,res)=>{
     try{
         const {name,email,password} = req.body;
@@ -12,8 +15,8 @@ exports.signup = async (req,res)=>{
         if(existingUser){
             return res.status(400).json({success:false,err:'Email already exists'});
         }
-        const user = await  User.create({name,email,password});
-        const token = generateToken(user._id);
+        const user = await  User.create({name,email,password,role:"admin"});
+        const token = generateToken(user);
         res
             .cookie('token', token, {
                 httpOnly: true,
@@ -29,7 +32,8 @@ exports.signup = async (req,res)=>{
                     id: user._id,
                     name: user.name,
                     email: user.email
-                }
+                },
+                token
             });
     }catch (err){
         res.status(500).json({success:false,err:err.message});
@@ -50,11 +54,7 @@ exports.signin = async (req, res) => {
             return res.status(400).json({ success: false, err: "Invalid Password" });
         }
 
-        const token = jwt.sign(
-            { id: user._id.toString(), role: user.role },
-            process.env.NEXTAUTH_SECRET,
-            { expiresIn: "1h" }
-        );
+        const token = generateToken(user);
 
         return res.status(200).json({
             success: true,
@@ -65,7 +65,7 @@ exports.signin = async (req, res) => {
                 email: user.email,
                 role: user.role,
             },
-            token, // <— include token in response
+            token,
         });
     } catch (err) {
         return res.status(500).json({ success: false, err: err.message });
