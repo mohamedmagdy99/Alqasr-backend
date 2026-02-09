@@ -30,10 +30,10 @@ const uploadMiddleware = (req, res, next) => {
 };
 
 // Routes
-router.post('/', auth, uploadMiddleware, createProject);
-router.put('/:id', auth, upload.fields([{ name: 'image', maxCount: 30 }]), updateProject);
+router.post('/', uploadMiddleware, createProject);
+router.put('/:id', upload.fields([{ name: 'image', maxCount: 30 }]), updateProject);
 router.get('/', getAllProjects);
 router.get('/:id', getProjectById);
-router.delete('/:id', auth, deleteProject);
+router.delete('/:id', deleteProject);
 router.get("/main/:id", getAllProjectsForMainProject);
 module.exports = router;

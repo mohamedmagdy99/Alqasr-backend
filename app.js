@@ -8,9 +8,10 @@ const errorHandler = require('./middleware/errorHandler');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const allowedOrigins = [
-    "http://localhost:3001",
-    "https://alqasy-realestate-development.vercel.app",
-    "https://www.elqasr-development.com"
+  "http://localhost:3001",
+  "http://localhost:3000",
+  "https://alqasy-realestate-development.vercel.app",
+  "https://www.elqasr-development.com",
 ];
 
 app.use(

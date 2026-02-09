@@ -22,7 +22,7 @@ const uploadMiddleware = (req, res, next) => {
     next();
   });
 };
-router.post("/", auth, uploadMiddleware, createMainProject);
+router.post("/", uploadMiddleware, createMainProject);
 router.get("/", getAllMainProjects);
 router.get("/:id", getMainProjectById);
 router.put(
@@ -31,6 +31,6 @@ router.put(
   upload.fields([{ name: "image", maxCount: 30 }]),
   updateMainProject
 );
-router.delete("/:id", auth, deleteMainProject);
+router.delete("/:id", deleteMainProject);
 
 module.exports = router;
