@@ -19,8 +19,8 @@ exports.createProject = async (req, res) => {
 
     const uploadedImages = await Promise.all(
       imageFiles.map((file) =>
-        uploadToS3(file.buffer, file.originalname, file.mimetype)
-      )
+        uploadToS3(file.buffer, file.originalname, file.mimetype),
+      ),
     );
 
     const projectData = {
@@ -121,7 +121,7 @@ exports.updateProject = async (req, res) => {
   try {
     session.startTransaction();
     const existingProject = await Project.findById(req.params.id).session(
-      session
+      session,
     );
     if (!existingProject) {
       await session.abortTransaction();
@@ -145,7 +145,7 @@ exports.updateProject = async (req, res) => {
           new DeleteObjectCommand({
             Bucket: process.env.AWS_BUCKET_NAME,
             Key: key,
-          })
+          }),
         );
 
         await gallery
@@ -161,8 +161,8 @@ exports.updateProject = async (req, res) => {
     if (req.files && req.files.image?.length) {
       newImages = await Promise.all(
         req.files.image.map((file) =>
-          uploadToS3(file.buffer, file.originalname, file.mimetype)
-        )
+          uploadToS3(file.buffer, file.originalname, file.mimetype),
+        ),
       );
     }
 
@@ -179,7 +179,7 @@ exports.updateProject = async (req, res) => {
     // -----------------------------
     const finalImages = [
       ...(existingProject.image || []).filter(
-        (img) => !removedImages.includes(img)
+        (img) => !removedImages.includes(img),
       ),
       ...newImages,
     ];
@@ -227,7 +227,7 @@ exports.updateProject = async (req, res) => {
     const updatedProject = await Project.findByIdAndUpdate(
       req.params.id,
       updatedData,
-      { new: true, runValidators: true, session }
+      { new: true, runValidators: true, session },
     );
 
     await session.commitTransaction();
@@ -259,7 +259,7 @@ exports.deleteProject = async (req, res) => {
           new DeleteObjectCommand({
             Bucket: process.env.AWS_BUCKET_NAME,
             Key: key,
-          })
+          }),
         );
       }
     }
@@ -281,7 +281,7 @@ exports.getAllProjectsForMainProject = async (req, res) => {
     const { page = 1, limit = 10 } = req.query;
     const skip = (page - 1) * limit;
     const { id } = req.params;
-    
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
@@ -294,8 +294,8 @@ exports.getAllProjectsForMainProject = async (req, res) => {
         createdAt: -1,
       })
       .skip(skip)
-      .limit(parseInt(limit));
-      
+      .limit(parseInt(limit))
+      .lean();
     const total = await Project.countDocuments({ mainProject: id });
     res.status(200).json({
       success: true,
